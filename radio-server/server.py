@@ -21,7 +21,8 @@ from random import shuffle
 # Globals
 version = "4.2.1"
 database = "database.db"
-player = 'omxplayer'
+#player = 'omxplayer'
+player = 'mplayer'
 
 header = '''<!DOCTYPE html>
 <html lang="en">
@@ -121,6 +122,15 @@ header = '''<!DOCTYPE html>
             "html"
         );
      }
+     function fstatus() {
+        $.post('/stat/',
+            function(data){
+                $("#radio-status").html(data);
+                $("#radio-status").show();
+            },
+            "html"
+        );
+     }
 
 // ----------------------------------------------------------
      $(document).ready(function() {
@@ -191,6 +201,10 @@ header = '''<!DOCTYPE html>
             });
             e.preventDefault();
          });
+         window.setInterval(function(){
+            fstatus();
+         }, 10000);
+
        });
      </script>
 </head>
@@ -236,6 +250,7 @@ header = '''<!DOCTYPE html>
    </div> <!-- Jumbotron END -->
 
  <div id="radio-volume"> </div>
+ <div id="radio-status"> </div>
  <div id="radio-table"> </div>
 '''
 
@@ -415,8 +430,18 @@ class Root:
         if vol == "" or vol == None :
            html += "Error"
         v = volume(vol)
-
         html += "<h6>%s (%s) </h6>" % (v, vol)
+        return html
+
+    @cherrypy.expose
+    def stat(self):
+        html = ""
+        try:
+            bat = ' bat=%d%%' % int(subprocess.check_output('/usr/sbin/i2cget -y -f 0 0x34 0xb9', shell=True), 16)
+        except:
+            bat = 'bat=ERR'
+
+        html += "<h6> %s</h6>" % (bat)
         return html
 
     @cherrypy.expose
@@ -716,7 +741,7 @@ def playradio(urlid):
         command = "/usr/bin/mpg123 -q %s" % url
         pidplayer = subprocess.Popen(command, shell=True).pid
     if player == 'mplayer':
-        command = "/usr/bin/mplayer -really-quiet %s" % url
+        command = "/usr/bin/mplayer -really-quiet -cache 256 %s" % url
         pidplayer = subprocess.Popen(command, shell=True).pid
     if player == 'omxplayer':
         # Process is in background
@@ -746,10 +771,10 @@ def volume(vol) :
 def volume_alsa(vol):
     # With ALSA on CHIP
     if vol == 'up':
-        db = subprocess.check_output(["amixer set 'Power Amplifier' 5%+"], shell=True)
+        db = subprocess.check_output(["amixer set 'PCM' 1%+"], shell=True)
         #db = os.system("amixer set 'Power Amplifier' 5%+")
     if vol == 'down':
-        db = subprocess.check_output(["amixer set 'Power Amplifier' 5%-"], shell=True)
+        db = subprocess.check_output(["amixer set 'PCM' 1%-"], shell=True)
         #db = os.system("amixer set 'Power Amplifier' 5%-")
     i = db.rfind(':')
     return db[i+1:]
@@ -814,8 +839,8 @@ if __name__ == '__main__':
     parser.add_argument('--stage', action="store", dest="stage", default="production")
     parser.add_argument('--database', action="store", dest="database",  default="database.db")
     parser.add_argument('--root', action="store", dest="root", default=".")
-    parser.add_argument('--pid', action="store", dest="pid", default="/tmp/8804.pid")
-    parser.add_argument('--port', action="store", dest="port", type=int, default=8804)
+    parser.add_argument('--pid', action="store", dest="pid", default="/tmp/80.pid")
+    parser.add_argument('--port', action="store", dest="port", type=int, default=80)
 
     # get args
     args = parser.parse_args()
