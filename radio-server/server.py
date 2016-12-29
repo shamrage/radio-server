@@ -17,12 +17,123 @@ import sqlite3 as lite
 import re
 import subprocess
 from random import shuffle
+from oled.serial import i2c
+from oled.device import ssd1306
+from oled.render import canvas
+from PIL import ImageFont
+from math import log10
+import threading
+
+
+class Oled(threading.Thread):
+    def __init__(self, blank=False):
+        threading.Thread.__init__(self)
+        self.device = i2c(port=1, address=0x3C)
+        self.oled = ssd1306(self.device)
+        self.font = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',20)
+        self.statfont = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',12)
+        self.botfont = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',9)
+        self.blank = blank
+        self.msg_genre = ''
+        self.msg_station = ''
+        self.sleep_time = .05
+        self.volume = 0
+        self.msg_pos = 0
+
+    def set_message(self, msg_genre, msg_station):
+        self.msg_genre = msg_genre.split(',')[0] if ',' in msg_genre else msg_genre
+        self.msg_station = msg_station
+        self.msg_pos = 0
+
+    def run(self):
+        # rectanges are (Left,Top,Right,Bottom)
+        disp_width = self.oled.bounding_box[2]
+        disp_height = self.oled.bounding_box[3]
+        bat_bar = 0
+        while True:
+            if self.blank:
+                with canvas(self.oled) as draw:
+                    draw.rectangle(self.oled.bounding_box, outline="black", fill="black")
+            else:
+                link = os.popen('/sbin/iwconfig wlan0').read()
+                m = re.search('Link Quality=(.*?/)', link)
+                link_quality = int(m.groups()[0].split('/')[0])
+                bars = int(round(link_quality/100.*5))
+                bat = int(round(int(os.popen('/usr/sbin/i2cget -y -f 0 0x34 0xb9').read(), 16)/100.*12))
+                d_msb = int(os.popen('/usr/sbin/i2cget -y -f 0 0x34 0x7c').read(), 16)<<5
+                d_lsb = int(os.popen('/usr/sbin/i2cget -y -f 0 0x34 0x7d').read(), 16)&0x1f
+                bat_discharge_ma = int(round((d_msb|d_lsb)*0.5))
+                c_msb = int(os.popen('/usr/sbin/i2cget -y -f 0 0x34 0x7a').read(), 16)<<5
+                c_lsb = int(os.popen('/usr/sbin/i2cget -y -f 0 0x34 0x7b').read(), 16)&0x1f
+                bat_charge_ma = int(round((c_msb|c_lsb)*0.5))
+                if bat_charge_ma>bat_discharge_ma:
+                    if bat_charge_ma<1000:
+                        bat_cur = '+%dmA' % bat_charge_ma
+                    else:
+                        bat_cur = '+%0.1fA' % (bat_charge_ma/1000.)
+                else:
+                    if bat_discharge_ma<1000:
+                        bat_cur = '-'+str(bat_discharge_ma)+'mA'
+                    else:
+                        bat_cur = '-%0.1fA' % (bat_discharge_ma/1000.)
+                temperature = os.popen("sudo axp209 --temperature").read()
+                temperature = temperature[:-3].strip()
+                temperature = str(int(round(float(temperature))))+"\xb0"
+                with canvas(self.oled) as draw:
+                    # WIFI signal strength
+                    for b in range(bars):
+                        draw.rectangle((111 + (b*3), 14-(b*3), 111+(b*3)+2, 15), fill=255)
+                    # Battery meter
+                    # horizontal battery:
+                    #draw.rectangle((91,1,110,7), fill=0, outline=255)
+                    #draw.rectangle((89,3,91,5), fill=255)
+                    #for b in range(bat):
+                    #    draw.rectangle((91 + (b*4), 1, 91+(b*4)+1, 7), fill=255)
+                    draw.rectangle((99,1,106,15), fill=0, outline=255)
+                    draw.rectangle((101,0,104,1), fill=255)
+                    draw.rectangle((99, 12-bat+3, 105, 14), fill=255)
+                    # Volume
+                    draw.rectangle((85,14,87,14), fill=255)
+                    draw.polygon([(86,14), (83,11), (89,11), (86,14)], fill=255)
+                    if self.volume>0:
+                        vol = max(1,int(round(log10(float(self.volume))*5)))
+                        #wide = max(1,vol/2)
+                        wide = vol
+                        draw.polygon([(85,10), (86-wide,10-vol), (86+wide,10-vol), (87,10)], fill=128)
+
+                    # CPU temperature
+                    draw.text((0,2), temperature, font=self.statfont, fill=255)
+                    # Battery current
+                    draw.text((27,2), bat_cur, font=self.statfont, fill=255)
+                    # Message area
+                    w,h = self.statfont.getsize(self.msg_genre)
+                    pos = 0 if w>disp_width else (disp_width-w)/2
+                    draw.text((pos,16), self.msg_genre, font=self.statfont, fill=255)
+                    w,h = self.font.getsize(self.msg_station)
+                    if w<=disp_width:
+                        pos = (disp_width-w)/2
+                        draw.text((pos,29), self.msg_station, font=self.font, fill=255)
+                    else:
+                        spacing = max(20, disp_width-w)
+                        draw.text((self.msg_pos,29), self.msg_station, font=self.font, fill=255)
+                        draw.text((self.msg_pos+w+spacing,29), self.msg_station, font=self.font, fill=255)
+                        self.msg_pos -= 1
+                        if self.msg_pos <= -(w+spacing):
+                            self.msg_pos = 0
+                    # Bottom status area
+                    tm = time.strftime("%a %b %-d %H:%M:%S")
+                    w,h = self.botfont.getsize(tm)
+                    draw.text(((disp_width-w)/2,disp_height-h+1), tm, font=self.botfont, fill=255)
+                time.sleep(self.sleep_time)
 
 # Globals
 version = "4.2.1"
 database = "database.db"
 #player = 'omxplayer'
 player = 'mplayer'
+display = Oled(blank=True)
+display.daemon = True
+display.start()
 
 header = '''<!DOCTYPE html>
 <html lang="en">
@@ -399,6 +510,7 @@ class Root:
 
     @cherrypy.expose
     def p(self, id):
+        global display
         html = ""
         if id == "" or id == None :
             html += "Error no radio id"
@@ -411,6 +523,9 @@ class Root:
         if  url == '':
             html += "Error in parameter %s" % url
             return html
+
+        display.blank = False
+        display.set_message(genre, radio)
 
         cherrypy.session['playing'] = id
         html += '''<h3>Now Playing: '''
@@ -752,7 +867,8 @@ def playradio(urlid):
     return (radio, genre, urlid)
 
 def killall():
-    global player
+    global player, display
+    display.blank = True
     status = 0
     if player == 'omxplayer':
         control = "/usr/local/bin/omxcontrol"
@@ -762,11 +878,13 @@ def killall():
     return status
 
 def volume(vol) :
-    global player
+    global player, display
     if player == 'omxplayer':
-        return volume_omxplayer(vol)
+        v = volume_omxplayer(vol)
     else:
-        return volume_alsa(vol)
+        v = volume_alsa(vol)
+    display.volume = int(v[v.find('[')+1:v.find('%]')])
+    return v
 
 def volume_alsa(vol):
     # With ALSA on CHIP
@@ -830,6 +948,7 @@ def secureheaders():
     headers['X-XSS-Protection'] = '1; mode=block'
     headers['Content-Security-Policy'] = "default-src='self'"
 
+
 if __name__ == '__main__':
 
     import argparse
@@ -851,6 +970,9 @@ if __name__ == '__main__':
     os.chdir(root)
     current_dir = os.path.dirname(os.path.abspath(__file__))
     setplayer(args.player)
+    # Trick to set the initial volume
+    volume('down')
+    volume('up')
 
     writemypid(args.pid)
 
