@@ -32,7 +32,7 @@ class Oled(threading.Thread):
         self.oled = ssd1306(self.device)
         self.font = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',20)
         self.statfont = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',12)
-        self.botfont = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',9)
+        self.botfont = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',11)
         self.blank = blank
         self.msg_genre = ''
         self.msg_station = ''
