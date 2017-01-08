@@ -15,6 +15,8 @@ import socket
 import cherrypy
 import sqlite3 as lite
 import re
+import urllib2
+import json
 import subprocess
 from random import shuffle
 from oled.serial import i2c
@@ -22,6 +24,7 @@ from oled.device import ssd1306
 from oled.render import canvas
 from PIL import ImageFont
 from math import log10
+from tempfile import mkstemp
 import threading
 
 
@@ -63,7 +66,7 @@ class Oled(threading.Thread):
                 d_msb = int(os.popen('/usr/sbin/i2cget -y -f 0 0x34 0x7c').read(), 16)<<5
                 d_lsb = int(os.popen('/usr/sbin/i2cget -y -f 0 0x34 0x7d').read(), 16)&0x1f
                 bat_discharge_ma = int(round((d_msb|d_lsb)*0.5))
-                c_msb = int(os.popen('/usr/sbin/i2cget -y -f 0 0x34 0x7a').read(), 16)<<5
+                c_msb = int(os.popen('/usr/sbin/i2cget -y -f 0 0x34 0x7a').read(), 16)<<4
                 c_lsb = int(os.popen('/usr/sbin/i2cget -y -f 0 0x34 0x7b').read(), 16)&0x1f
                 bat_charge_ma = int(round((c_msb|c_lsb)*0.5))
                 if bat_charge_ma>bat_discharge_ma:
@@ -131,6 +134,7 @@ version = "4.2.1"
 database = "database.db"
 #player = 'omxplayer'
 player = 'mplayer'
+#player = 'mpg123'
 display = Oled(blank=True)
 display.daemon = True
 display.start()
@@ -366,6 +370,21 @@ header = '''<!DOCTYPE html>
 '''
 
 footer = '''<p></div></body></html>'''
+
+def npr_playlist(url, start=0):
+    page = urllib2.urlopen(url).read()
+    m = re.search('data-play-all=\'(.*)\'', page)
+    pl = json.loads(m.groups()[0])
+    urls = [d['audioUrl'] for d in pl['audioData']][start:]
+    fd,playlist = mkstemp(suffix='.m3u')
+    with open(playlist,'w') as fp:
+        for url in urls:
+           u = 'http'+url.split('?')[0][5:]
+           fp.write(u+'\n')
+    os.close(fd)
+    fp.close()
+    return playlist
+
 
 def isplayfile(pathname) :
     if os.path.isfile(pathname) == False:
@@ -852,16 +871,26 @@ def playradio(urlid):
 
     status = 0
     killall()
+
+    if url[-1]=='/':
+        playme = npr_playlist(url)
+        ispl = True
+    else:
+        playme = url
+        ispl = False
+
     if player == 'mpg123':
-        command = "/usr/bin/mpg123 -q %s" % url
-        pidplayer = subprocess.Popen(command, shell=True).pid
+        command = "/usr/bin/mpg123 -q --list " if ispl else  "/usr/bin/mpg123 -q "
+        shell = True
     if player == 'mplayer':
-        command = "/usr/bin/mplayer -really-quiet -cache 256 %s" % url
-        pidplayer = subprocess.Popen(command, shell=True).pid
+        command = "/usr/bin/mplayer -really-quiet -cache 256 --playlist=" if ispl else "/usr/bin/mplayer -really-quiet -cache 256 "
+        shell = True
     if player == 'omxplayer':
         # Process is in background
-        p = 'omxplayer'
-        subprocess.Popen([p, url])
+        command = 'omxplayer '
+        shell = False
+
+    subprocess.Popen(command+playme, shell=shell)
 
     updatelastradio(urlid)
     return (radio, genre, urlid)
