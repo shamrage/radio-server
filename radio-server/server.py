@@ -133,8 +133,8 @@ class Oled(threading.Thread):
 version = "4.2.1"
 database = "database.db"
 #player = 'omxplayer'
-player = 'mplayer'
-#player = 'mpg123'
+#player = 'mplayer'
+player = 'mpg123'
 display = Oled(blank=True)
 display.daemon = True
 display.start()
@@ -983,7 +983,7 @@ if __name__ == '__main__':
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--player', action="store", dest="player", default="mplayer")
+    parser.add_argument('--player', action="store", dest="player", default="mpg123")
     parser.add_argument('--stage', action="store", dest="stage", default="production")
     parser.add_argument('--database', action="store", dest="database",  default="database.db")
     parser.add_argument('--root', action="store", dest="root", default=".")
