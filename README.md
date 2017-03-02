@@ -15,7 +15,7 @@ Starting from git repository I would suggest this (suppose your target device is
 
 	ssh root@192.168.168.2.123
 	cd /tmp
-	git clone https://github.com/ernitron/radio-server.git
+	git clone https://github.com/shamrage/radio-server.git
 	cd radio-server
 	sudo cp -a radio-server /usr/local/bin
 
