@@ -19,9 +19,9 @@ import urllib2
 import json
 import subprocess
 from random import shuffle
-from oled.serial import i2c
-from oled.device import ssd1306
-from oled.render import canvas
+from luma.core.serial import i2c
+from luma.oled.device import ssd1306
+from luma.core.render import canvas
 from PIL import ImageFont
 from math import log10
 from tempfile import mkstemp
@@ -987,8 +987,8 @@ if __name__ == '__main__':
     parser.add_argument('--stage', action="store", dest="stage", default="production")
     parser.add_argument('--database', action="store", dest="database",  default="database.db")
     parser.add_argument('--root', action="store", dest="root", default=".")
-    parser.add_argument('--pid', action="store", dest="pid", default="/tmp/80.pid")
-    parser.add_argument('--port', action="store", dest="port", type=int, default=80)
+    parser.add_argument('--pid', action="store", dest="pid", default="/tmp/888.pid")
+    parser.add_argument('--port', action="store", dest="port", type=int, default=888)
 
     # get args
     args = parser.parse_args()
