@@ -907,21 +907,19 @@ def killall():
     return status
 
 def volume(vol) :
-    global player, display
+    global player
     if player == 'omxplayer':
-        v = volume_omxplayer(vol)
+        return volume_omxplayer(vol)
     else:
-        v = volume_alsa(vol)
-    display.volume = int(v[v.find('[')+1:v.find('%]')])
-    return v
+        return volume_alsa(vol)
 
 def volume_alsa(vol):
     # With ALSA on CHIP
     if vol == 'up':
-        db = subprocess.check_output(["amixer set 'PCM' 1%+"], shell=True)
+        db = subprocess.check_output(["amixer -q sset 'Power Amplifier' 1%+"], shell=True)
         #db = os.system("amixer set 'Power Amplifier' 5%+")
     if vol == 'down':
-        db = subprocess.check_output(["amixer set 'PCM' 1%-"], shell=True)
+        db = subprocess.check_output(["amixer -q sset 'Power Amplifier' 1%-"], shell=True)
         #db = os.system("amixer set 'Power Amplifier' 5%-")
     i = db.rfind(':')
     return db[i+1:]
